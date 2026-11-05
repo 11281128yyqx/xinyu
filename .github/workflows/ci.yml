@@ -1,0 +1,53 @@
+# GitHub Actions CI 配置文件
+# 作用：每次 push 代码到 GitHub，自动跑类型检查 + 构建 + 单元测试，全过了才算合格
+#
+# 修复记录：
+#   1. node-version 从 '20' 改为 '22'
+#      —— package.json 的 engines 要求 "^22.18.0 || >=24.12.0"，用 20 会报 EBADENGINE 直接失败
+#   2. 把 "npm run lint" 换成 "npm run type-check"
+#      —— package.json 里没有 lint 脚本，这一步必然报 "Missing script: lint"
+#         type-check 是项目里真实存在且更有意义的检查
+#   3. 新增单元测试步骤（vitest run）
+#      —— 之前只有构建没有测试，CI 名不副实
+
+name: CI
+
+# ============ 触发条件 ============
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# ============ 任务 ============
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 第 1 步：拉代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 第 2 步：装 Node.js（必须与 package.json engines 一致）
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # 第 3 步：严格按 lock 文件装依赖（CI 场景比 npm install 更快更稳定）
+      - name: Install dependencies
+        run: npm ci
+
+      # 第 4 步：TypeScript 类型检查（严格模式下的类型错误在这里暴露）
+      - name: Type check
+        run: npm run type-check
+
+      # 第 5 步：单元测试（组件渲染 + Pinia store 逻辑）
+      - name: Unit tests
+        run: npm run test
+
+      # 第 6 步：生产构建
+      - name: Build
+        run: npm run build
